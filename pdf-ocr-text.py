@@ -1,39 +1,34 @@
-import os
 import pytesseract
 from pdf2image import convert_from_path
+import cv2
+import numpy as np
 from PIL import Image
+import os
 
-# Set path to Tesseract executable if not in PATH
-# Example for Windows:
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Optional: Set path to tesseract executable if needed
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-# 📁 Folder containing PDFs
-pdf_folder = 'C:/Users/Public/Split PDF/input/'
-output_folder = 'C:/Users/Public/Split PDF/output'
+def preprocess_image(img_path):
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    img = cv2.medianBlur(img, 3)
+    return img
 
-# Create output folder if it doesn't exist
-os.makedirs(output_folder, exist_ok=True)
+def ocr_pdf(pdf_path, output_dir="ocr_output"):
+    os.makedirs(output_dir, exist_ok=True)
+    pages = convert_from_path(pdf_path, dpi=300)
 
-# 🔁 Loop through all PDFs in the folder
-for filename in os.listdir(pdf_folder):
-    if filename.lower().endswith('.pdf'):
-        pdf_path = os.path.join(pdf_folder, filename)
-        print(f"Processing: {filename}")
+    for i, page in enumerate(pages):
+        img_path = os.path.join(output_dir, f"page_{i+1}.png")
+        page.save(img_path, "PNG")
 
-        # Convert PDF to images
-        images = convert_from_path(pdf_path, poppler_path=r'C:\Program Files\poppler\Library\bin')
-        
+        processed_img = preprocess_image(img_path)
+        text = pytesseract.image_to_string(processed_img, lang='eng')
 
+        with open(os.path.join(output_dir, f"page_{i+1}.txt"), "w", encoding="utf-8") as f:
+            f.write(text)
 
-        # OCR each page
-        full_text = ''
-        for i, image in enumerate(images):
-            text = pytesseract.image_to_string(image)
-            full_text += f"\n--- Page {i+1} ---\n{text}"
+    print(f"OCR completed. Text files saved in '{output_dir}'.")
 
-        # Save to text file
-        output_path = os.path.join(output_folder, f"{os.path.splitext(filename)[0]}.txt")
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(full_text)
-
-        print(f"Saved OCR output to: {output_path}")
+# Example usage
+ocr_pdf("your_scanned_document.pdf")
